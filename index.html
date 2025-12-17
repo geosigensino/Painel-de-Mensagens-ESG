@@ -304,13 +304,6 @@
 
       <!-- VISÃO ADMIN -->
       <div id="adminArea" style="display:none;">
-        <!-- NOVO: Ações do Administrador nas próprias mensagens -->
-        <div class="card">
-          <h2>Minhas mensagens criadas (Administrador)</h2>
-          <p class="muted">Você pode copiar link, editar e excluir as mensagens criadas por você.</p>
-          <div id="adminMinhasMensagens"></div>
-        </div>
-
         <div class="card">
           <h2>Resumo das mensagens</h2>
           <p class="muted">O administrador enxerga todas as mensagens, inclusive as excluídas pelos autores.</p>
@@ -342,7 +335,7 @@
     const ADMIN_NAME = "Administrador";
     const ADMIN_PASSWORD = "ESG_2025";
 
-    // Senhas dos sócios (troque aqui quando quiser)
+    // Senhas dos sócios
     const USER_PASSWORDS = {
       "Bruno Ferreira": "BF_eco2025!",
       "Carlos Barretto": "CB_eco2025!",
@@ -447,7 +440,6 @@
 
     const adminListaMensagens = document.getElementById("adminListaMensagens");
     const adminDetalhesMensagem = document.getElementById("adminDetalhesMensagem");
-    const adminMinhasMensagens = document.getElementById("adminMinhasMensagens"); // NOVO
 
     // LOGIN UI
     function syncLoginUI() {
@@ -562,8 +554,6 @@
           attempts: [],
         };
 
-        // Sócios confirmam mensagens de outros sócios + admin.
-        // Para mensagens do admin, todos os sócios entram aqui.
         USERS.forEach((u) => {
           if (u !== obj.autor) obj.confirmations[u] = null;
         });
@@ -721,20 +711,10 @@
       }
     }
 
-    // EDITAR: permite para o próprio autor.
-    // Sócio: só edita se autor == currentUser
-    // Admin: edita se autor == "Administrador"
     window.editarMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-
-      const podeEditar =
-        (currentRole === "admin" && msg.autor === ADMIN_NAME) ||
-        (currentRole === "user" && msg.autor === currentUser);
-
-      if (!podeEditar) {
-        return alert("Você só pode editar mensagens criadas por você.");
-      }
+      if (msg.autor !== currentUser) return alert("Você só pode editar mensagens criadas por você.");
 
       const novoTitulo = prompt("Edite o título:", msg.titulo);
       if (novoTitulo === null) return;
@@ -745,15 +725,11 @@
       const titulo = (novoTitulo.trim() || msg.titulo);
       const texto = (novoTexto.trim() || msg.texto);
 
-      // Admin atualiza as próprias mensagens (autor_name = Administrador)
-      // Sócio atualiza as próprias mensagens (autor_name = currentUser)
-      const authorCheck = (currentRole === "admin") ? ADMIN_NAME : currentUser;
-
       const { error } = await supabase
         .from("messages")
         .update({ title: titulo, body: texto })
         .eq("id", id)
-        .eq("author_name", authorCheck);
+        .eq("author_name", currentUser);
 
       if (error) {
         console.error("Erro ao editar mensagem:", error);
@@ -763,28 +739,19 @@
       await refreshAndRender();
     };
 
-    // EXCLUIR: mesma regra do editar
+    // Excluir para sócios: soft delete
     window.excluirMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-
-      const podeExcluir =
-        (currentRole === "admin" && msg.autor === ADMIN_NAME) ||
-        (currentRole === "user" && msg.autor === currentUser);
-
-      if (!podeExcluir) {
-        return alert("Você só pode excluir mensagens criadas por você.");
-      }
+      if (msg.autor !== currentUser) return alert("Você só pode excluir mensagens criadas por você.");
 
       if (!confirm("Deseja excluir esta mensagem da sua visão? O administrador manterá o histórico.")) return;
-
-      const authorCheck = (currentRole === "admin") ? ADMIN_NAME : currentUser;
 
       const { error } = await supabase
         .from("messages")
         .update({ deleted_by_author: true })
         .eq("id", id)
-        .eq("author_name", authorCheck);
+        .eq("author_name", currentUser);
 
       if (error) {
         console.error("Erro ao excluir mensagem:", error);
@@ -856,46 +823,61 @@
       await refreshAndRender();
     };
 
-    // ADMIN
-    function renderAdminView() {
-      // NOVO: minhas mensagens (admin)
-      const minhasAdmin = messages.filter((m) => m.autor === ADMIN_NAME && !m.deletedByAuthor);
-
-      if (!adminMinhasMensagens) {
-        // segurança caso o elemento não exista por algum motivo
-      } else if (minhasAdmin.length === 0) {
-        adminMinhasMensagens.innerHTML = '<p class="no-data">Você ainda não criou nenhuma mensagem como administrador.</p>';
-      } else {
-        let html = '<div class="table-wrap"><table class="table"><thead><tr>' +
-          "<th>Título</th><th>Criada em</th><th>Confirmações</th><th>Ações</th>" +
-          "</tr></thead><tbody>";
-
-        minhasAdmin.forEach((m) => {
-          const totalRecebedores = Object.keys(m.confirmations || {}).length;
-          const totalConfirmadas = Object.values(m.confirmations || {}).filter((v) => v !== null).length;
-
-          html += `<tr>
-            <td>
-              <div class="message-title">${m.titulo}</div>
-              <div class="muted">Autor: ${m.autor}</div>
-            </td>
-            <td>${formatDateTime(m.createdAt)}</td>
-            <td><span class="tag">${totalConfirmadas} / ${totalRecebedores}</span></td>
-            <td>
-              <div class="stack-row">
-                <button class="btn-sm btn-outline" onclick="copyMessageLink('${m.id}')">Copiar link</button>
-                <button class="btn-sm btn-outline" onclick="editarMensagem('${m.id}')">Editar</button>
-                <button class="btn-sm btn-danger" onclick="excluirMensagem('${m.id}')">Excluir</button>
-              </div>
-            </td>
-          </tr>`;
-        });
-
-        html += "</tbody></table></div>";
-        adminMinhasMensagens.innerHTML = html;
+    // ====== ADMIN: EXCLUSÃO DEFINITIVA DE QUALQUER AUTOR (com confirmação dupla) ======
+    window.excluirMensagemAdmin = async function (id) {
+      if (currentRole !== "admin") {
+        return alert("Apenas o administrador pode executar esta ação.");
       }
 
-      // tabela geral
+      const msg = messages.find((m) => m.id === id);
+      if (!msg) return alert("Mensagem não encontrada.");
+
+      const confirm1 = confirm(
+        `ATENÇÃO: você está prestes a excluir DEFINITIVAMENTE esta mensagem.\n\n` +
+        `Título: ${msg.titulo}\nAutor: ${msg.autor}\n\n` +
+        `Isso removerá também confirmações e tentativas.\n\nDeseja continuar?`
+      );
+      if (!confirm1) return;
+
+      const typed = prompt("Para confirmar, digite EXCLUIR (em maiúsculas):");
+      if (typed !== "EXCLUIR") {
+        return alert("Confirmação inválida. A mensagem NÃO foi excluída.");
+      }
+
+      // Apaga confirmações (best-effort)
+      const { error: delConfsErr } = await supabase
+        .from("message_confirmations")
+        .delete()
+        .eq("message_id", id);
+      if (delConfsErr) console.error("Erro ao apagar confirmações:", delConfsErr);
+
+      // Apaga tentativas (best-effort)
+      const { error: delAttsErr } = await supabase
+        .from("message_attempts")
+        .delete()
+        .eq("message_id", id);
+      if (delAttsErr) console.error("Erro ao apagar tentativas:", delAttsErr);
+
+      // Apaga mensagem
+      const { error: delMsgErr } = await supabase
+        .from("messages")
+        .delete()
+        .eq("id", id);
+
+      if (delMsgErr) {
+        console.error("Erro ao apagar mensagem:", delMsgErr);
+        return alert("Erro ao excluir definitivamente a mensagem.");
+      }
+
+      adminDetalhesMensagem.innerHTML =
+        '<p class="no-data">Mensagem excluída definitivamente. Selecione outra mensagem para ver detalhes.</p>';
+
+      await refreshAndRender();
+      alert("Mensagem excluída definitivamente com sucesso.");
+    };
+
+    // ADMIN
+    function renderAdminView() {
       if (messages.length === 0) {
         adminListaMensagens.innerHTML = '<p class="no-data">Não há mensagens registradas ainda.</p>';
         adminDetalhesMensagem.innerHTML = '<p class="no-data">Selecione uma mensagem para ver detalhes.</p>';
@@ -903,7 +885,7 @@
       }
 
       let html = '<div class="table-wrap"><table class="table"><thead><tr>' +
-        "<th>Título</th><th>Autor</th><th>Data</th><th>Status</th><th>Confirmações</th><th>Ver</th>" +
+        "<th>Título</th><th>Autor</th><th>Data</th><th>Status</th><th>Confirmações</th><th>Ações</th><th>Ver</th>" +
         "</tr></thead><tbody>";
 
       messages.forEach((m) => {
@@ -925,6 +907,12 @@
             ${remainingText ? `<div class="muted countdown" data-created-at="${m.createdAt}" data-msg-id="${m.id}">${remainingText}</div>` : ""}
           </td>
           <td><span class="tag">${totalConfirmadas} / ${totalRecebedores}</span></td>
+          <td>
+            <div class="stack-row">
+              <button class="btn-sm btn-outline" onclick="copyMessageLink('${m.id}')">Copiar link</button>
+              <button class="btn-sm btn-danger" onclick="excluirMensagemAdmin('${m.id}')">Excluir</button>
+            </div>
+          </td>
           <td><button class="btn-sm btn-outline" onclick="verDetalhesAdmin('${m.id}')">Detalhes</button></td>
         </tr>`;
       });
