@@ -301,6 +301,9 @@
     const ADMIN_NAME = "Administrador";
     const ADMIN_PASSWORD = "ESG_2025";
 
+    // Rótulo único do botão (padronização total)
+    const LABEL_CIENTE = "Ciente";
+
     let currentIP = null;
     let currentUser = null;
     let currentRole = null; // "admin" ou "user"
@@ -355,9 +358,7 @@
     const loginCard = document.getElementById("loginCard");
     const mainArea = document.getElementById("mainArea");
     const roleSelect = document.getElementById("roleSelect");
-    const adminPasswordContainer = document.getElementById(
-      "adminPasswordContainer"
-    );
+    const adminPasswordContainer = document.getElementById("adminPasswordContainer");
     const adminPasswordInput = document.getElementById("adminPassword");
     const btnLogin = document.getElementById("btnLogin");
     const btnLogout = document.getElementById("btnLogout");
@@ -378,9 +379,7 @@
     const listaParaConfirmar = document.getElementById("listaParaConfirmar");
 
     const adminListaMensagens = document.getElementById("adminListaMensagens");
-    const adminDetalhesMensagem = document.getElementById(
-      "adminDetalhesMensagem"
-    );
+    const adminDetalhesMensagem = document.getElementById("adminDetalhesMensagem");
 
     // ------------------------
     // LOGIN
@@ -395,6 +394,7 @@
 
     btnLogin.addEventListener("click", async () => {
       const roleValue = roleSelect.value;
+
       if (roleValue === "Administrador") {
         const pass = adminPasswordInput.value.trim();
         if (pass !== ADMIN_PASSWORD) {
@@ -415,12 +415,11 @@
 
       if (currentRole === "admin") {
         viewTitle.textContent = "Área do Administrador";
-        viewSubtitle.textContent =
-          "Visão completa das mensagens e confirmações de leitura.";
+        viewSubtitle.textContent = "Visão completa das mensagens e confirmações de leitura.";
       } else {
         viewTitle.textContent = "Painel do Sócio";
         viewSubtitle.textContent =
-          "Crie mensagens, acompanhe seus recados e confirme o que foi lido. Confirmação depende do IP detectado.";
+          "Crie mensagens, acompanhe seus recados e registre ciência do que foi lido. Confirmação depende do IP detectado.";
       }
 
       await fetchIP();
@@ -438,7 +437,6 @@
     // CARGA DE DADOS DO SUPABASE
     // ------------------------
     async function loadMessagesFromSupabase() {
-      // mensagens
       const { data: msgs, error: errMsgs } = await supabase
         .from("messages")
         .select("*")
@@ -450,21 +448,15 @@
         return;
       }
 
-      // confirmações
       const { data: confs, error: errConfs } = await supabase
         .from("message_confirmations")
         .select("*");
-      if (errConfs) {
-        console.error("Erro ao carregar confirmações:", errConfs);
-      }
+      if (errConfs) console.error("Erro ao carregar confirmações:", errConfs);
 
-      // tentativas
       const { data: atts, error: errAtts } = await supabase
         .from("message_attempts")
         .select("*");
-      if (errAtts) {
-        console.error("Erro ao carregar tentativas:", errAtts);
-      }
+      if (errAtts) console.error("Erro ao carregar tentativas:", errAtts);
 
       const confsByMsg = {};
       (confs || []).forEach((row) => {
@@ -490,20 +482,14 @@
           attempts: [],
         };
 
-        // confirmações default: outros sócios
         USERS.forEach((u) => {
           if (u !== obj.autor) obj.confirmations[u] = null;
         });
 
-        // aplicar confirmações
         (confsByMsg[m.id] || []).forEach((c) => {
-          obj.confirmations[c.user_name] = {
-            time: c.confirmed_at,
-            ip: c.ip,
-          };
+          obj.confirmations[c.user_name] = { time: c.confirmed_at, ip: c.ip };
         });
 
-        // aplicar tentativas
         obj.attempts = (attsByMsg[m.id] || []).map((a) => ({
           user: a.attempted_by,
           ip: a.ip,
@@ -527,14 +513,8 @@
       const titulo = msgTituloInput.value.trim();
       const texto = msgTextoInput.value.trim();
 
-      if (!titulo) {
-        alert("Informe um título para a mensagem.");
-        return;
-      }
-      if (!texto) {
-        alert("Informe o conteúdo da mensagem.");
-        return;
-      }
+      if (!titulo) return alert("Informe um título para a mensagem.");
+      if (!texto) return alert("Informe o conteúdo da mensagem.");
 
       const { error } = await supabase.from("messages").insert({
         title: titulo,
@@ -544,8 +524,7 @@
 
       if (error) {
         console.error("Erro ao salvar mensagem:", error);
-        alert("Erro ao salvar mensagem.");
-        return;
+        return alert("Erro ao salvar mensagem.");
       }
 
       msgTituloInput.value = "";
@@ -577,10 +556,7 @@
     // VISÃO SÓCIOS
     // ------------------------
     function renderSociosView() {
-      // minhas mensagens
-      const minhas = messages.filter(
-        (m) => m.autor === currentUser && !m.deletedByAuthor
-      );
+      const minhas = messages.filter((m) => m.autor === currentUser && !m.deletedByAuthor);
 
       if (minhas.length === 0) {
         listaMinhasMensagens.innerHTML =
@@ -588,16 +564,12 @@
       } else {
         let html =
           '<table class="table"><thead><tr>' +
-          "<th>Título</th>" +
-          "<th>Criada em</th>" +
-          "<th>Confirmações</th>" +
-          "<th>Ações</th>" +
+          "<th>Título</th><th>Criada em</th><th>Confirmações</th><th>Ações</th>" +
           "</tr></thead><tbody>";
+
         minhas.forEach((m) => {
           const totalRecebedores = Object.keys(m.confirmations || {}).length;
-          const totalConfirmadas = Object.values(m.confirmations || {}).filter(
-            (v) => v !== null
-          ).length;
+          const totalConfirmadas = Object.values(m.confirmations || {}).filter((v) => v !== null).length;
 
           html += `<tr>
             <td>
@@ -615,11 +587,11 @@
             </td>
           </tr>`;
         });
+
         html += "</tbody></table>";
         listaMinhasMensagens.innerHTML = html;
       }
 
-      // mensagens para confirmar
       const paraConfirmar = messages.filter((m) => {
         if (m.deletedByAuthor) return false;
         if (m.autor === currentUser) return false;
@@ -633,16 +605,13 @@
       } else {
         let html =
           '<table class="table"><thead><tr>' +
-          "<th>Título</th>" +
-          "<th>Autor</th>" +
-          "<th>Conteúdo</th>" +
-          "<th>Status</th>" +
-          "<th>Ação</th>" +
+          "<th>Título</th><th>Autor</th><th>Conteúdo</th><th>Status</th><th>Ação</th>" +
           "</tr></thead><tbody>";
 
         paraConfirmar.forEach((m) => {
           const status = m.confirmations[currentUser];
           const jaConfirmou = !!status;
+
           html += `<tr>
             <td>${m.titulo}</td>
             <td>${m.autor}</td>
@@ -650,9 +619,7 @@
             <td>
               ${
                 jaConfirmou
-                  ? `<span class="badge badge-success">Confirmado em ${formatDateTime(
-                      status.time
-                    )}</span>`
+                  ? `<span class="badge badge-success">Confirmado em ${formatDateTime(status.time)}</span>`
                   : `<span class="badge badge-info">Pendente</span>`
               }
             </td>
@@ -660,7 +627,7 @@
               ${
                 jaConfirmou
                   ? '<span class="muted">Nada a fazer</span>'
-                  : `<button class="btn-sm" onclick="confirmarLeitura('${m.id}')">Ciente</button>`
+                  : `<button class="btn-sm" onclick="confirmarLeitura('${m.id}')">${LABEL_CIENTE}</button>`
               }
             </td>
           </tr>`;
@@ -675,10 +642,8 @@
     window.editarMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-      if (msg.autor !== currentUser) {
-        alert("Você só pode editar mensagens criadas por você.");
-        return;
-      }
+      if (msg.autor !== currentUser) return alert("Você só pode editar mensagens criadas por você.");
+
       const novoTitulo = prompt("Edite o título:", msg.titulo);
       if (novoTitulo === null) return;
       const novoTexto = prompt("Edite o texto:", msg.texto);
@@ -695,8 +660,7 @@
 
       if (error) {
         console.error("Erro ao editar mensagem:", error);
-        alert("Erro ao editar mensagem.");
-        return;
+        return alert("Erro ao editar mensagem.");
       }
 
       await refreshAndRender();
@@ -706,16 +670,9 @@
     window.excluirMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-      if (msg.autor !== currentUser) {
-        alert("Você só pode excluir mensagens criadas por você.");
-        return;
-      }
-      if (
-        !confirm(
-          "Tem certeza que deseja excluir esta mensagem da sua visão? O administrador continuará vendo o histórico."
-        )
-      )
-        return;
+      if (msg.autor !== currentUser) return alert("Você só pode excluir mensagens criadas por você.");
+
+      if (!confirm("Tem certeza que deseja excluir esta mensagem da sua visão? O administrador continuará vendo o histórico.")) return;
 
       const { error } = await supabase
         .from("messages")
@@ -725,8 +682,7 @@
 
       if (error) {
         console.error("Erro ao excluir mensagem:", error);
-        alert("Erro ao excluir mensagem.");
-        return;
+        return alert("Erro ao excluir mensagem.");
       }
 
       await refreshAndRender();
@@ -734,21 +690,16 @@
 
     // Copiar link simbólico
     window.copyMessageLink = function (id) {
-      const fakeUrl =
-        window.location.origin + window.location.pathname + "?mensagem=" + id;
+      const fakeUrl = window.location.origin + window.location.pathname + "?mensagem=" + id;
       copyToClipboard(fakeUrl);
     };
 
-    // Confirmar leitura com Supabase + log de tentativa
+    // Registrar ciência no Supabase + log de tentativa
     window.confirmarLeitura = async function (id) {
       if (!currentIP) {
-        alert(
-          "Não foi possível identificar o IP do dispositivo. Verifique sua conexão e recarregue a página."
-        );
-        return;
+        return alert("Não foi possível identificar o IP do dispositivo. Verifique sua conexão e recarregue a página.");
       }
 
-      // Buscar confirmações dessa mensagem direto no Supabase
       const { data: confRows, error } = await supabase
         .from("message_confirmations")
         .select("*")
@@ -756,62 +707,42 @@
 
       if (error) {
         console.error("Erro ao buscar confirmações:", error);
-        alert("Erro ao verificar confirmações.");
-        return;
+        return alert("Erro ao verificar confirmações.");
       }
 
       const confs = confRows || [];
 
-      // Já confirmou com este usuário?
       const jaConfirmou = confs.find((c) => c.user_name === currentUser);
-      if (jaConfirmou) {
-        alert("Você já confirmou esta mensagem.");
-        return;
-      }
+      if (jaConfirmou) return alert("Você já registrou ciência desta mensagem.");
 
-      // Verificar se o IP já foi usado por outro usuário
-      const outroComMesmoIP = confs.find(
-        (c) => c.ip === currentIP && c.user_name !== currentUser
-      );
+      const outroComMesmoIP = confs.find((c) => c.ip === currentIP && c.user_name !== currentUser);
       if (outroComMesmoIP) {
-        // registrar tentativa bloqueada
         const reason = `IP já utilizado pelo usuário ${outroComMesmoIP.user_name} nesta mensagem`;
-        const { error: attErr } = await supabase
-          .from("message_attempts")
-          .insert({
-            message_id: id,
-            attempted_by: currentUser,
-            ip: currentIP,
-            reason,
-          });
-        if (attErr) {
-          console.error("Erro ao registrar tentativa:", attErr);
-        }
+        const { error: attErr } = await supabase.from("message_attempts").insert({
+          message_id: id,
+          attempted_by: currentUser,
+          ip: currentIP,
+          reason,
+        });
+        if (attErr) console.error("Erro ao registrar tentativa:", attErr);
 
-        alert(
-          "Este IP já foi utilizado para confirmar esta mensagem em outro usuário. Não é possível confirmar novamente."
-        );
+        alert("Este IP já foi utilizado para registrar ciência desta mensagem em outro usuário. Não é possível registrar novamente.");
         await refreshAndRender();
         return;
       }
 
-      // registrar confirmação
-      const { error: confErr } = await supabase
-        .from("message_confirmations")
-        .insert({
-          message_id: id,
-          user_name: currentUser,
-          ip: currentIP,
-        });
+      const { error: confErr } = await supabase.from("message_confirmations").insert({
+        message_id: id,
+        user_name: currentUser,
+        ip: currentIP,
+      });
 
       if (confErr) {
-        console.error("Erro ao registrar confirmação:", confErr);
-        alert("Erro ao registrar confirmação.");
-        return;
+        console.error("Erro ao registrar ciência:", confErr);
+        return alert("Erro ao registrar ciência.");
       }
 
-      // Ajuste: mensagem de sucesso coerente com o botão "Ciente"
-      alert("Ciente registrado com sucesso.");
+      alert(`${LABEL_CIENTE} registrado com sucesso.`);
       await refreshAndRender();
     };
 
@@ -820,28 +751,19 @@
     // ------------------------
     function renderAdminView() {
       if (messages.length === 0) {
-        adminListaMensagens.innerHTML =
-          '<p class="no-data">Não há mensagens registradas ainda.</p>';
-        adminDetalhesMensagem.innerHTML =
-          '<p class="no-data">Selecione uma mensagem para ver detalhes.</p>';
+        adminListaMensagens.innerHTML = '<p class="no-data">Não há mensagens registradas ainda.</p>';
+        adminDetalhesMensagem.innerHTML = '<p class="no-data">Selecione uma mensagem para ver detalhes.</p>';
         return;
       }
 
       let html =
         '<table class="table"><thead><tr>' +
-        "<th>Título</th>" +
-        "<th>Autor</th>" +
-        "<th>Data</th>" +
-        "<th>Status</th>" +
-        "<th>Confirmações</th>" +
-        "<th>Ver</th>" +
+        "<th>Título</th><th>Autor</th><th>Data</th><th>Status</th><th>Confirmações</th><th>Ver</th>" +
         "</tr></thead><tbody>";
 
       messages.forEach((m) => {
         const totalRecebedores = Object.keys(m.confirmations || {}).length;
-        const totalConfirmadas = Object.values(m.confirmations || {}).filter(
-          (v) => v !== null
-        ).length;
+        const totalConfirmadas = Object.values(m.confirmations || {}).filter((v) => v !== null).length;
 
         html += `<tr>
           <td>${m.titulo}</td>
@@ -856,9 +778,7 @@
           </td>
           <td><span class="tag">${totalConfirmadas} / ${totalRecebedores}</span></td>
           <td>
-            <button class="btn-sm btn-outline" onclick="verDetalhesAdmin('${m.id}')">
-              Detalhes
-            </button>
+            <button class="btn-sm btn-outline" onclick="verDetalhesAdmin('${m.id}')">Detalhes</button>
           </td>
         </tr>`;
       });
@@ -878,9 +798,7 @@
           <div class="muted">Autor: ${msg.autor}</div>
           <div class="muted">Criada em: ${formatDateTime(msg.createdAt)}</div>
           <div class="muted">Status: ${
-            msg.deletedByAuthor
-              ? "Excluída pelo autor (mantida para registro)"
-              : "Ativa"
+            msg.deletedByAuthor ? "Excluída pelo autor (mantida para registro)" : "Ativa"
           }</div>
         </div>
         <div>
@@ -888,20 +806,16 @@
           <div class="message-text">${msg.texto}</div>
         </div>
         <div>
-          <h3>Confirmações de leitura (por usuário e IP)</h3>
+          <h3>Registros de ciência (por usuário e IP)</h3>
       `;
 
       const confs = msg.confirmations || {};
       if (Object.keys(confs).length === 0) {
-        html +=
-          '<p class="no-data">Não há configuração de confirmações para esta mensagem.</p>';
+        html += '<p class="no-data">Não há configuração de confirmações para esta mensagem.</p>';
       } else {
         html +=
           '<table class="table"><thead><tr>' +
-          "<th>Sócio</th>" +
-          "<th>Status</th>" +
-          "<th>Data/hora</th>" +
-          "<th>IP</th>" +
+          "<th>Sócio</th><th>Status</th><th>Data/hora</th><th>IP</th>" +
           "</tr></thead><tbody>";
 
         Object.keys(confs).forEach((user) => {
@@ -910,7 +824,7 @@
             <td>${user}</td>
             <td>${
               info
-                ? '<span class="badge badge-success">Confirmado</span>'
+                ? '<span class="badge badge-success">Ciente</span>'
                 : '<span class="badge badge-info">Pendente</span>'
             }</td>
             <td>${info ? formatDateTime(info.time) : "-"}</td>
@@ -923,22 +837,17 @@
 
       html += "</div>";
 
-      // Tentativas bloqueadas
       html += `<div>
-        <h3>Tentativas de confirmação bloqueadas</h3>
+        <h3>Tentativas de registro bloqueadas</h3>
       `;
 
       const attempts = Array.isArray(msg.attempts) ? msg.attempts : [];
       if (attempts.length === 0) {
-        html +=
-          '<p class="no-data">Não foram registradas tentativas bloqueadas para esta mensagem.</p>';
+        html += '<p class="no-data">Não foram registradas tentativas bloqueadas para esta mensagem.</p>';
       } else {
         html +=
           '<table class="table"><thead><tr>' +
-          "<th>Usuário que tentou</th>" +
-          "<th>Data/hora</th>" +
-          "<th>IP</th>" +
-          "<th>Motivo</th>" +
+          "<th>Usuário que tentou</th><th>Data/hora</th><th>IP</th><th>Motivo</th>" +
           "</tr></thead><tbody>";
 
         attempts.forEach((att) => {
