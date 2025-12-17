@@ -225,9 +225,7 @@
     <!-- LOGIN -->
     <div id="loginCard" class="card">
       <h1>Painel de Mensagens · Eco Smart Group</h1>
-      <p class="muted">
-        Selecione o perfil e informe a senha.
-      </p>
+      <p class="muted">Selecione o perfil e informe a senha.</p>
       <div class="divider"></div>
 
       <div class="stack">
@@ -306,6 +304,13 @@
 
       <!-- VISÃO ADMIN -->
       <div id="adminArea" style="display:none;">
+        <!-- NOVO: Ações do Administrador nas próprias mensagens -->
+        <div class="card">
+          <h2>Minhas mensagens criadas (Administrador)</h2>
+          <p class="muted">Você pode copiar link, editar e excluir as mensagens criadas por você.</p>
+          <div id="adminMinhasMensagens"></div>
+        </div>
+
         <div class="card">
           <h2>Resumo das mensagens</h2>
           <p class="muted">O administrador enxerga todas as mensagens, inclusive as excluídas pelos autores.</p>
@@ -442,6 +447,7 @@
 
     const adminListaMensagens = document.getElementById("adminListaMensagens");
     const adminDetalhesMensagem = document.getElementById("adminDetalhesMensagem");
+    const adminMinhasMensagens = document.getElementById("adminMinhasMensagens"); // NOVO
 
     // LOGIN UI
     function syncLoginUI() {
@@ -556,6 +562,8 @@
           attempts: [],
         };
 
+        // Sócios confirmam mensagens de outros sócios + admin.
+        // Para mensagens do admin, todos os sócios entram aqui.
         USERS.forEach((u) => {
           if (u !== obj.autor) obj.confirmations[u] = null;
         });
@@ -713,10 +721,20 @@
       }
     }
 
+    // EDITAR: permite para o próprio autor.
+    // Sócio: só edita se autor == currentUser
+    // Admin: edita se autor == "Administrador"
     window.editarMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-      if (msg.autor !== currentUser) return alert("Você só pode editar mensagens criadas por você.");
+
+      const podeEditar =
+        (currentRole === "admin" && msg.autor === ADMIN_NAME) ||
+        (currentRole === "user" && msg.autor === currentUser);
+
+      if (!podeEditar) {
+        return alert("Você só pode editar mensagens criadas por você.");
+      }
 
       const novoTitulo = prompt("Edite o título:", msg.titulo);
       if (novoTitulo === null) return;
@@ -727,11 +745,15 @@
       const titulo = (novoTitulo.trim() || msg.titulo);
       const texto = (novoTexto.trim() || msg.texto);
 
+      // Admin atualiza as próprias mensagens (autor_name = Administrador)
+      // Sócio atualiza as próprias mensagens (autor_name = currentUser)
+      const authorCheck = (currentRole === "admin") ? ADMIN_NAME : currentUser;
+
       const { error } = await supabase
         .from("messages")
         .update({ title: titulo, body: texto })
         .eq("id", id)
-        .eq("author_name", currentUser);
+        .eq("author_name", authorCheck);
 
       if (error) {
         console.error("Erro ao editar mensagem:", error);
@@ -741,18 +763,28 @@
       await refreshAndRender();
     };
 
+    // EXCLUIR: mesma regra do editar
     window.excluirMensagem = async function (id) {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
-      if (msg.autor !== currentUser) return alert("Você só pode excluir mensagens criadas por você.");
+
+      const podeExcluir =
+        (currentRole === "admin" && msg.autor === ADMIN_NAME) ||
+        (currentRole === "user" && msg.autor === currentUser);
+
+      if (!podeExcluir) {
+        return alert("Você só pode excluir mensagens criadas por você.");
+      }
 
       if (!confirm("Deseja excluir esta mensagem da sua visão? O administrador manterá o histórico.")) return;
+
+      const authorCheck = (currentRole === "admin") ? ADMIN_NAME : currentUser;
 
       const { error } = await supabase
         .from("messages")
         .update({ deleted_by_author: true })
         .eq("id", id)
-        .eq("author_name", currentUser);
+        .eq("author_name", authorCheck);
 
       if (error) {
         console.error("Erro ao excluir mensagem:", error);
@@ -826,6 +858,44 @@
 
     // ADMIN
     function renderAdminView() {
+      // NOVO: minhas mensagens (admin)
+      const minhasAdmin = messages.filter((m) => m.autor === ADMIN_NAME && !m.deletedByAuthor);
+
+      if (!adminMinhasMensagens) {
+        // segurança caso o elemento não exista por algum motivo
+      } else if (minhasAdmin.length === 0) {
+        adminMinhasMensagens.innerHTML = '<p class="no-data">Você ainda não criou nenhuma mensagem como administrador.</p>';
+      } else {
+        let html = '<div class="table-wrap"><table class="table"><thead><tr>' +
+          "<th>Título</th><th>Criada em</th><th>Confirmações</th><th>Ações</th>" +
+          "</tr></thead><tbody>";
+
+        minhasAdmin.forEach((m) => {
+          const totalRecebedores = Object.keys(m.confirmations || {}).length;
+          const totalConfirmadas = Object.values(m.confirmations || {}).filter((v) => v !== null).length;
+
+          html += `<tr>
+            <td>
+              <div class="message-title">${m.titulo}</div>
+              <div class="muted">Autor: ${m.autor}</div>
+            </td>
+            <td>${formatDateTime(m.createdAt)}</td>
+            <td><span class="tag">${totalConfirmadas} / ${totalRecebedores}</span></td>
+            <td>
+              <div class="stack-row">
+                <button class="btn-sm btn-outline" onclick="copyMessageLink('${m.id}')">Copiar link</button>
+                <button class="btn-sm btn-outline" onclick="editarMensagem('${m.id}')">Editar</button>
+                <button class="btn-sm btn-danger" onclick="excluirMensagem('${m.id}')">Excluir</button>
+              </div>
+            </td>
+          </tr>`;
+        });
+
+        html += "</tbody></table></div>";
+        adminMinhasMensagens.innerHTML = html;
+      }
+
+      // tabela geral
       if (messages.length === 0) {
         adminListaMensagens.innerHTML = '<p class="no-data">Não há mensagens registradas ainda.</p>';
         adminDetalhesMensagem.innerHTML = '<p class="no-data">Selecione uma mensagem para ver detalhes.</p>';
