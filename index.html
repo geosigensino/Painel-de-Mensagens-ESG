@@ -148,7 +148,7 @@
       width:100%;
       border-collapse: collapse;
       font-size: .85rem;
-      min-width: 760px; /* garante boa leitura e ativa scroll no mobile */
+      min-width: 760px;
     }
 
     .table th, .table td{
@@ -206,7 +206,6 @@
 
     .no-data{ font-size:.9rem; color:#9ca3af; padding: 6px 0; }
 
-    /* Mobile */
     @media (max-width: 640px){
       .app{ padding: 10px; }
       .card{ padding: 14px; }
@@ -216,7 +215,7 @@
         width: 100%;
         justify-content:center;
       }
-      .table{ min-width: 740px; } /* mantém scroll no mobile */
+      .table{ min-width: 740px; }
     }
   </style>
 </head>
@@ -501,7 +500,7 @@
 
       await fetchIP();
       await refreshAndRender();
-      startCountdownTicker(); // atualiza só a contagem, sem bater no Supabase
+      startCountdownTicker();
     });
 
     btnLogout.addEventListener("click", () => {
@@ -703,7 +702,7 @@
                   ? `<span class="muted">Nada a fazer</span>`
                   : expirado
                     ? `<span class="muted">Prazo encerrado</span>`
-                    : `<button class="btn-sm" onclick="confirmarLeitura('${m.id}')">Confirmar leitura</button>`
+                    : `<button class="btn-sm" onclick="confirmarLeitura('${m.id}')">Ciente</button>`
               }
             </td>
           </tr>`;
@@ -821,7 +820,7 @@
         return alert("Erro ao registrar confirmação.");
       }
 
-      alert("Leitura confirmada com sucesso.");
+      alert("Ciente registrado com sucesso.");
       await refreshAndRender();
     };
 
@@ -934,25 +933,21 @@
       adminDetalhesMensagem.innerHTML = html;
     };
 
-    // TICKER (atualiza somente os textos de contagem regressiva, sem recarregar do Supabase)
+    // TICKER
     let ticker = null;
 
     function updateCountdownTexts() {
       document.querySelectorAll(".countdown").forEach((el) => {
         const createdAt = el.getAttribute("data-created-at");
         const text = formatRemainingText(createdAt);
-        if (!text) {
-          el.textContent = "Prazo encerrado";
-        } else {
-          el.textContent = text;
-        }
+        el.textContent = text ? text : "Prazo encerrado";
       });
     }
 
     function startCountdownTicker() {
       stopCountdownTicker();
       updateCountdownTexts();
-      ticker = setInterval(updateCountdownTexts, 30 * 1000); // a cada 30s
+      ticker = setInterval(updateCountdownTexts, 30 * 1000);
     }
 
     function stopCountdownTicker() {
